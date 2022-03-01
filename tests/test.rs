@@ -12,7 +12,7 @@ use spl_token::{
 };
 
 #[tokio::test]
-async fn test_initialize_exchange_booth() {
+async fn test_create_mint() {
     let program_id = Pubkey::new_unique();
     let mut program_test = ProgramTest::default();
     program_test.add_program("xbooth", program_id, None);
@@ -96,71 +96,50 @@ async fn test_initialize_exchange_booth() {
         .await
         .unwrap();
 
-    // let mint_to_ix = instruction::mint_to(
-    //     &id(),
-    //     &token_mint_a_account.pubkey(),
-    //     &token_account.pubkey(),
-    //     &owner.pubkey(),
-    //     &[],
-    //     10,
-    // )
-    // .unwrap();
+    /// Mint tokens to token account
+    let mint_amount: u64 = 10;
+    let mint_to_ix = instruction::mint_to(
+        &id(),
+        &mint_a_account.pubkey(),
+        &token_account.pubkey(),
+        &owner.pubkey(),
+        &[],
+        mint_amount.clone(),
+    )
+    .unwrap();
 
-    // let mint_to_tx = Transaction::new_signed_with_payer(
-    //     &[mint_to_ix],
-    //     Some(&payer.pubkey()),
-    //     &[&payer],
-    //     recent_blockhash,
-    // );
-    // bank_client.process_transaction(mint_to_tx).await.unwrap();
+    let mint_to_tx = Transaction::new_signed_with_payer(
+        &[mint_to_ix],
+        Some(&payer.pubkey()),
+        &[&payer, &owner],
+        recent_blockhash,
+    );
+    bank_client.process_transaction(mint_to_tx).await.unwrap();
 
-    // let token_mint_account_info = bank_client
-    //     .get_account(token_mint_a_account.pubkey().clone())
-    //     .await
-    //     .unwrap()
-    //     .expect("could not get account");
-    // let token_account_data = token_mint_account_info.data;
-    // println!(
-    //     "account len : {:}, token account len: {:}",
-    //     Mint::LEN,
-    //     &token_account_data.len()
-    // );
-    // let mint_data = Mint::unpack(&token_account_data).unwrap();
+    /// Inspect mint state
+    let token_mint_account_info = bank_client
+        .get_account(mint_a_account.pubkey().clone())
+        .await
+        .unwrap()
+        .expect("could not get account");
+    let token_account_data = token_mint_account_info.data;
+    println!(
+        "account len : {:}, token account len: {:}",
+        Mint::LEN,
+        &token_account_data.len()
+    );
+    let mint_data = Mint::unpack(&token_account_data).unwrap();
 
-    //panic!("token data: {:?}", mint_data);
-    // let vault_a_account_ix = spl_token::instruction::initialize_account(
-    //     &spl_token::id(),
-    //     &token_account_a,
-    //     &token_mint_a.pubkey(),
-    //     &auth.pubkey(),
-    // )
-    // .expect("failed to create vault account instruction");
-
-    // let vault_a_account_tx = Transaction::new_signed_with_payer(
-    //     &[vault_a_account_ix],
-    //     Some(&payer.pubkey()),
-    //     &[&payer, &token_mint_a],
-    //     recent_blockhash,
-    // );
-
-    // let vault_a_mint_ix = spl_token::instruction::initialize_mint(
-    //     &spl_token::id(),
-    //     &token_mint_a.pubkey(),
-    //     &token_authority_a,
-    //     None,
-    //     9_u8,
-    // )
-    // .expect("failed to create vault a mint instruction");
-
-    // let vault_a_mint_tx = Transaction::new_signed_with_payer(
-    //     &[vault_a_mint_ix],
-    //     Some(&payer.pubkey()),
-    //     &[&payer, &token_mint_a],
-    //     recent_blockhash,
-    // );
-
-    // bank_client
-    //     .process_transactions(vec![vault_a_account_tx])
-    //     .await
-    //     .expect("failed to process vault a account creation transaction");
+    let token_account_info = bank_client
+        .get_account(token_account.pubkey().clone())
+        .await
+        .unwrap()
+        .expect("could not fetch account information");
+    let account_data = Account::unpack(&token_account_info.data).unwrap();
+    println!("account data: {:?}", account_data);
+    assert_eq!(
+        account_data.amount,
+        mint_amount.clone(),
+        "not correct amount"
+    );
 }
