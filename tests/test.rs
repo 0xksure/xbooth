@@ -129,7 +129,11 @@ async fn test_create_mint() {
         &token_account_data.len()
     );
     let mint_data = Mint::unpack(&token_account_data).unwrap();
-
+    assert_eq!(
+        mint_data.supply,
+        mint_amount.clone(),
+        "not correct amount in mint account"
+    );
     let token_account_info = bank_client
         .get_account(token_account.pubkey().clone())
         .await
