@@ -4,8 +4,8 @@ use borsh::{BorshDeserialize, BorshSerialize};
 
 use solana_program::{
     account_info::next_account_info, account_info::AccountInfo, entrypoint::ProgramResult, msg,
-    program::invoke, program::invoke_signed, program_error::ProgramError, pubkey::Pubkey,
-    system_instruction::create_account,
+    program::invoke, program::invoke_signed, program_error::ProgramError, program_pack::Pack,
+    pubkey::Pubkey, system_instruction::create_account,
 };
 
 use spl_token::state::Account as TokenAccount;
@@ -30,9 +30,9 @@ impl Processor {
                 let system_program = next_account_info(accounts_iter)?;
                 let vault_a = next_account_info(accounts_iter)?;
                 let vault_b = next_account_info(accounts_iter)?;
-                let token_program_a = next_account_info(accounts_iter)?;
-                let token_program_b = next_account_info(accounts_iter)?;
-
+                let mint_a = next_account_info(accounts_iter)?;
+                let mint_b = next_account_info(accounts_iter)?;
+                let token_program = next_account_info(accounts_iter)?;
                 let (pda, bump) = Pubkey::find_program_address(
                     &[
                         b"initialize_exchange_booth",
@@ -50,21 +50,21 @@ impl Processor {
 
                 // check if vaults exists
                 // create vault if not existant?
-                let _vault_a =
-                    TokenAccount::unpack_unchecked(vault_a.data.borrow()).map_err(|e| {
+                let _vault_a = TokenAccount::unpack_unchecked(vault_a.data.borrow().as_ref())
+                    .map_err(|e| {
                         msg!("invalid vault A");
                         return e;
                     })?;
 
-                let _vault_b =
-                    TokenAccount::unpack_unchecked(vault_b.data.borrow()).map_err(|e| {
+                let _vault_b = TokenAccount::unpack_unchecked(vault_b.data.borrow().as_ref())
+                    .map_err(|e| {
                         msg!("invalid vault B");
                         return e;
                     })?;
 
                 // create exchange_boot_program
                 let create_xbooth_program_ix =
-                    create_account(payer.key.as_ref(), &pda, 0_64, 0_u64, payer.key.as_ref());
+                    create_account(&payer.key, &pda, 0_64, 0_u64, &payer.key);
 
                 invoke_signed(
                     &create_xbooth_program_ix,
@@ -78,24 +78,25 @@ impl Processor {
                         exchange_booth_account.key.as_ref(),
                         &[bump],
                     ]],
-                );
+                )
+                .unwrap();
 
                 // deposit amount into exchange booth program_id
                 let deposit_mint_a_token_ix = spl_token::instruction::transfer(
-                    token_program_a.key,
+                    token_program.key,
                     payer.key,
                     &pda,
-                    payer.key.as_ref(),
-                    &[&payer],
+                    &payer.key,
+                    &[&payer.key],
                     10,
                 )?;
 
                 let deposit_mint_b_token_ix = spl_token::instruction::transfer(
-                    token_program_b.key,
+                    token_program.key,
                     payer.key,
                     &pda,
-                    payer.key.as_ref(),
-                    &[&payer],
+                    &payer.key,
+                    &[&payer.key],
                     10,
                 )?;
 
@@ -106,7 +107,7 @@ impl Processor {
                         exchange_booth_account.clone(),
                         system_program.clone(),
                     ],
-                );
+                )?;
 
                 invoke(
                     &deposit_mint_b_token_ix,
@@ -115,7 +116,7 @@ impl Processor {
                         exchange_booth_account.clone(),
                         system_program.clone(),
                     ],
-                );
+                )?;
             }
         }
         Ok(())
