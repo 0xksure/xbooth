@@ -33,6 +33,7 @@ impl Processor {
                 let mint_a = next_account_info(accounts_iter)?;
                 let mint_b = next_account_info(accounts_iter)?;
                 let token_program = next_account_info(accounts_iter)?;
+
                 let (pda, bump) = Pubkey::find_program_address(
                     &[
                         b"initialize_exchange_booth",
@@ -86,7 +87,7 @@ impl Processor {
                     token_program.key,
                     payer.key,
                     &pda,
-                    &payer.key,
+                    &mint_a.key,
                     &[&payer.key],
                     10,
                 )?;
@@ -95,7 +96,7 @@ impl Processor {
                     token_program.key,
                     payer.key,
                     &pda,
-                    &payer.key,
+                    &mint_b.key,
                     &[&payer.key],
                     10,
                 )?;

@@ -1,15 +1,100 @@
 //#![cfg(feature = "test-bpf")]
 use solana_program::{pubkey::Pubkey, system_program};
-use solana_program_test::{processor, tokio, ProgramTest};
+use solana_program_test::{tokio, BanksClient, ProgramTest};
 
 use solana_sdk::{
-    program_pack::Pack, signature::Keypair, signer::Signer, system_instruction,
-    transaction::Transaction,
+    hash::Hash, program_pack::Pack, signature::Keypair, signer::Signer, system_instruction,
+    transaction::Transaction, transport::TransportError,
 };
 use spl_token::{
     id, instruction,
     state::{Account, Mint},
 };
+
+/// create_and_initialize_account sets up a new account and
+/// initializes it to hold tokens from a specific mint
+async fn create_and_initialize_account(
+    bank_client: &mut BanksClient,
+    recent_blockhash: Hash,
+    payer: &Keypair,
+    owner: &Keypair,
+    token_account: &Keypair,
+    token_program: &Pubkey,
+    mint_account: &Keypair,
+) -> Result<(), TransportError> {
+    let rent = bank_client.get_rent().await.unwrap();
+    let account_rent = rent.minimum_balance(Account::LEN);
+    let new_token_account_ix = system_instruction::create_account(
+        &payer.pubkey(),
+        &token_account.pubkey(),
+        account_rent,
+        Account::LEN as u64,
+        token_program,
+    );
+
+    let initialize_account_ix = instruction::initialize_account(
+        token_program,
+        &token_account.pubkey(),
+        &mint_account.pubkey(),
+        &owner.pubkey(),
+    )
+    .unwrap();
+
+    let create_new_token_account_tx = Transaction::new_signed_with_payer(
+        &[new_token_account_ix, initialize_account_ix],
+        Some(&payer.pubkey()),
+        &[payer, token_account],
+        recent_blockhash,
+    );
+    bank_client
+        .process_transaction(create_new_token_account_tx)
+        .await?;
+    Ok(())
+}
+
+async fn create_and_initialize_mint(
+    bank_client: &mut BanksClient,
+    recent_blockhash: Hash,
+    payer: &Keypair,
+    owner: &Keypair,
+    mint_account: &Keypair,
+    token_program: &Pubkey,
+) -> Result<(), TransportError> {
+    let rent = bank_client.get_rent().await.unwrap();
+    let mint_rent = rent.minimum_balance(Mint::LEN);
+    // create account to hold newly minted tokens
+    let token_mint_a_account_ix = solana_program::system_instruction::create_account(
+        &payer.pubkey(),
+        &mint_account.pubkey(),
+        mint_rent,
+        Mint::LEN as u64,
+        token_program,
+    );
+
+    // initialize mint
+    let token_mint_a_ix = spl_token::instruction::initialize_mint(
+        token_program,
+        &mint_account.pubkey(),
+        &owner.pubkey(),
+        None,
+        9,
+    )
+    .unwrap();
+
+    // create mint transaction
+    let token_mint_a_tx = Transaction::new_signed_with_payer(
+        &[token_mint_a_account_ix, token_mint_a_ix],
+        Some(&payer.pubkey()),
+        &[payer, mint_account],
+        recent_blockhash,
+    );
+
+    bank_client
+        .process_transaction(token_mint_a_tx)
+        .await
+        .unwrap();
+    Ok(())
+}
 
 #[tokio::test]
 async fn test_create_mint() {
@@ -29,72 +114,32 @@ async fn test_create_mint() {
     let (mut bank_client, payer, recent_blockhash) = program_test.start().await;
 
     // Assemble accounts
-
-    let rent = bank_client.get_rent().await.unwrap();
-    let mint_rent = rent.minimum_balance(Mint::LEN);
     let mint_a_account = solana_sdk::signature::Keypair::new();
     let owner = solana_sdk::signature::Keypair::new();
-
-    // create account to hold newly minted tokens
-    let token_mint_a_account_ix = solana_program::system_instruction::create_account(
-        &payer.pubkey(),
-        &mint_a_account.pubkey(),
-        mint_rent,
-        Mint::LEN as u64,
+    create_and_initialize_mint(
+        &mut bank_client,
+        recent_blockhash,
+        &payer,
+        &owner,
+        &mint_a_account,
         &id(),
-    );
-
-    // initialize mint
-    let token_mint_a_ix = spl_token::instruction::initialize_mint(
-        &id(),
-        &mint_a_account.pubkey(),
-        &owner.pubkey(),
-        None,
-        9,
     )
+    .await
     .unwrap();
 
-    // create mint transaction
-    let token_mint_a_tx = Transaction::new_signed_with_payer(
-        &[token_mint_a_account_ix, token_mint_a_ix],
-        Some(&payer.pubkey()),
-        &[&payer, &mint_a_account],
-        recent_blockhash,
-    );
-
-    bank_client
-        .process_transaction(token_mint_a_tx)
-        .await
-        .unwrap();
-
+    /// initialize new account to hold all the minted tokens
     let token_account = Keypair::new();
-    let account_rent = rent.minimum_balance(Account::LEN);
-    let new_token_account_ix = system_instruction::create_account(
-        &payer.pubkey(),
-        &token_account.pubkey(),
-        account_rent,
-        Account::LEN as u64,
-        &id(),
-    );
-
-    let initialize_account_ix = instruction::initialize_account(
-        &id(),
-        &token_account.pubkey(),
-        &mint_a_account.pubkey(),
-        &owner.pubkey(),
-    )
-    .unwrap();
-
-    let create_new_token_account_tx = Transaction::new_signed_with_payer(
-        &[new_token_account_ix, initialize_account_ix],
-        Some(&payer.pubkey()),
-        &[&payer, &token_account],
+    create_and_initialize_account(
+        &mut bank_client,
         recent_blockhash,
-    );
-    bank_client
-        .process_transaction(create_new_token_account_tx)
-        .await
-        .unwrap();
+        &payer,
+        &owner,
+        &token_account,
+        &id(),
+        &mint_a_account,
+    )
+    .await
+    .unwrap();
 
     /// Mint tokens to token account
     let mint_amount: u64 = 10;
@@ -146,4 +191,7 @@ async fn test_create_mint() {
         mint_amount.clone(),
         "not correct amount"
     );
+
+    // create a vault
+    let vault_a = Keypair::new();
 }
