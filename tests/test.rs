@@ -159,6 +159,7 @@ async fn initialize_exchange_booth() {
         is_writable: false,
     };
 
+    // create mint a
     create_and_initialize_mint(
         &mut banks_client,
         recent_blockhash,
@@ -170,6 +171,7 @@ async fn initialize_exchange_booth() {
     .await
     .unwrap();
 
+    // create mint b
     create_and_initialize_mint(
         &mut banks_client,
         recent_blockhash,
