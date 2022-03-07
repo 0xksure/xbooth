@@ -1,61 +1,58 @@
-//#![cfg(feature = "test-bpf")]
-use solana_program::{pubkey::Pubkey, system_program};
-use solana_program_test::{tokio, BanksClient, ProgramTest};
-
+#![cfg(feature = "test-bpf")]
+use solana_program::{instruction, pubkey::Pubkey, system_program, sysvar};
+use solana_program_test::*;
 use solana_sdk::{
     hash::Hash, program_pack::Pack, signature::Keypair, signer::Signer, system_instruction,
     transaction::Transaction, transport::TransportError,
 };
-use spl_token::{
-    id, instruction,
-    state::{Account, Mint},
-};
+use spl_token::state::{Account, Mint};
+use std::mem;
 
 /// create_and_initialize_account sets up a new account and
 /// initializes it to hold tokens from a specific mint
-async fn create_and_initialize_account(
-    bank_client: &mut BanksClient,
-    recent_blockhash: Hash,
-    payer: &Keypair,
-    owner: &Keypair,
-    token_account: &Keypair,
-    token_program: &Pubkey,
-    mint_account: &Keypair,
-) -> Result<(), TransportError> {
-    let rent = bank_client.get_rent().await.unwrap();
-    let account_rent = rent.minimum_balance(Account::LEN);
-    let new_token_account_ix = system_instruction::create_account(
-        &payer.pubkey(),
-        &token_account.pubkey(),
-        account_rent,
-        Account::LEN as u64,
-        token_program,
-    );
+// async fn create_and_initialize_account(
+//     bank_client: &mut BanksClient,
+//     recent_blockhash: Hash,
+//     auth: &Keypair,
+//     owner: &Keypair,
+//     token_account: &Keypair,
+//     token_program: &Pubkey,
+//     mint_account: &Keypair,
+// ) -> Result<(), TransportError> {
+//     let rent = bank_client.get_rent().await.unwrap();
+//     let account_rent = rent.minimum_balance(Account::LEN);
+//     let new_token_account_ix = system_instruction::create_account(
+//         &auth.pubkey(),
+//         &token_account.pubkey(),
+//         account_rent,
+//         Account::LEN as u64,
+//         token_program,
+//     );
 
-    let initialize_account_ix = instruction::initialize_account(
-        token_program,
-        &token_account.pubkey(),
-        &mint_account.pubkey(),
-        &owner.pubkey(),
-    )
-    .unwrap();
+//     let initialize_account_ix = instruction::initialize_account(
+//         token_program,
+//         &token_account.pubkey(),
+//         &mint_account.pubkey(),
+//         &owner.pubkey(),
+//     )
+//     .unwrap();
 
-    let create_new_token_account_tx = Transaction::new_signed_with_payer(
-        &[new_token_account_ix, initialize_account_ix],
-        Some(&payer.pubkey()),
-        &[payer, token_account],
-        recent_blockhash,
-    );
-    bank_client
-        .process_transaction(create_new_token_account_tx)
-        .await?;
-    Ok(())
-}
+//     let create_new_token_account_tx = Transaction::new_signed_with_auth(
+//         &[new_token_account_ix, initialize_account_ix],
+//         Some(&auth.pubkey()),
+//         &[auth, token_account],
+//         recent_blockhash,
+//     );
+//     bank_client
+//         .process_transaction(create_new_token_account_tx)
+//         .await?;
+//     Ok(())
+// }
 
 async fn create_and_initialize_mint(
     bank_client: &mut BanksClient,
     recent_blockhash: Hash,
-    payer: &Keypair,
+    auth: &Keypair,
     owner: &Keypair,
     mint_account: &Keypair,
     token_program: &Pubkey,
@@ -64,7 +61,7 @@ async fn create_and_initialize_mint(
     let mint_rent = rent.minimum_balance(Mint::LEN);
     // create account to hold newly minted tokens
     let token_mint_a_account_ix = solana_program::system_instruction::create_account(
-        &payer.pubkey(),
+        &auth.pubkey(),
         &mint_account.pubkey(),
         mint_rent,
         Mint::LEN as u64,
@@ -84,8 +81,8 @@ async fn create_and_initialize_mint(
     // create mint transaction
     let token_mint_a_tx = Transaction::new_signed_with_payer(
         &[token_mint_a_account_ix, token_mint_a_ix],
-        Some(&payer.pubkey()),
-        &[payer, mint_account],
+        Some(&auth.pubkey()),
+        &[auth, mint_account],
         recent_blockhash,
     );
 
@@ -97,11 +94,14 @@ async fn create_and_initialize_mint(
 }
 
 #[tokio::test]
-async fn test_create_mint() {
+async fn initialize_exchange_booth() {
     let program_id = Pubkey::new_unique();
-    let mut program_test = ProgramTest::default();
-    program_test.add_program("xbooth", program_id, None);
-    let auth = solana_sdk::signature::Keypair::new();
+    let mut program_test = ProgramTest::new("xbooth", program_id, None);
+
+    let auth = Keypair::new();
+    let mint_a = Keypair::new();
+    let mint_b = Keypair::new();
+
     program_test.add_account(
         auth.pubkey(),
         solana_sdk::account::Account {
@@ -111,87 +111,144 @@ async fn test_create_mint() {
             ..solana_sdk::account::Account::default()
         },
     );
-    let (mut bank_client, payer, recent_blockhash) = program_test.start().await;
 
-    // Assemble accounts
-    let mint_a_account = solana_sdk::signature::Keypair::new();
-    let owner = solana_sdk::signature::Keypair::new();
+    let (mut banks_client, auth, recent_blockhash) = program_test.start().await;
+
+    let (xbooth_pda, xbooth_bump_seed) = Pubkey::find_program_address(
+        &[
+            b"xbooth",
+            auth.pubkey().as_ref(),
+            mint_a.pubkey().as_ref(),
+            mint_b.pubkey().as_ref(),
+        ],
+        &program_id,
+    );
+
+    let exchange_booth_account = instruction::AccountMeta {
+        pubkey: xbooth_pda,
+        is_writable: true,
+        is_signer: false,
+    };
+
+    let auth_account = instruction::AccountMeta {
+        pubkey: auth.pubkey(),
+        is_writable: false,
+        is_signer: true,
+    };
+
+    let system_program_account = instruction::AccountMeta {
+        pubkey: system_program::id(),
+        is_signer: false,
+        is_writable: false,
+    };
+
+    // * find pda for vault A
+    let (vault_a, vault_a_bump_seed) = Pubkey::find_program_address(
+        &[
+            b"xbooth",
+            auth.pubkey().as_ref(),
+            mint_a.pubkey().as_ref(),
+            xbooth_pda.as_ref(),
+        ],
+        &program_id,
+    );
+
+    let mint_a_account = instruction::AccountMeta {
+        pubkey: mint_a.pubkey(),
+        is_signer: false,
+        is_writable: false,
+    };
+
     create_and_initialize_mint(
-        &mut bank_client,
+        &mut banks_client,
         recent_blockhash,
-        &payer,
-        &owner,
-        &mint_a_account,
-        &id(),
+        &auth,
+        &auth,
+        &mint_a,
+        &spl_token::id(),
     )
     .await
     .unwrap();
 
-    /// initialize new account to hold all the minted tokens
-    let token_account = Keypair::new();
-    create_and_initialize_account(
-        &mut bank_client,
+    create_and_initialize_mint(
+        &mut banks_client,
         recent_blockhash,
-        &payer,
-        &owner,
-        &token_account,
-        &id(),
-        &mint_a_account,
+        &auth,
+        &auth,
+        &mint_b,
+        &spl_token::id(),
     )
     .await
     .unwrap();
 
-    /// Mint tokens to token account
-    let mint_amount: u64 = 10;
-    let mint_to_ix = instruction::mint_to(
-        &id(),
-        &mint_a_account.pubkey(),
-        &token_account.pubkey(),
-        &owner.pubkey(),
-        &[],
-        mint_amount.clone(),
-    )
-    .unwrap();
+    let vault_a_account = instruction::AccountMeta {
+        pubkey: vault_a,
+        is_signer: false,
+        is_writable: true,
+    };
 
-    let mint_to_tx = Transaction::new_signed_with_payer(
-        &[mint_to_ix],
-        Some(&payer.pubkey()),
-        &[&payer, &owner],
+    // * find pda for vault B
+    let (vault_b, vault_b_bump_seed) = Pubkey::find_program_address(
+        &[
+            b"xbooth",
+            auth.pubkey().as_ref(),
+            mint_b.pubkey().as_ref(),
+            xbooth_pda.as_ref(),
+        ],
+        &program_id,
+    );
+
+    let mint_b_account = instruction::AccountMeta {
+        pubkey: mint_b.pubkey(),
+        is_signer: false,
+        is_writable: false,
+    };
+
+    let vault_b_account = instruction::AccountMeta {
+        pubkey: vault_b,
+        is_signer: false,
+        is_writable: true,
+    };
+
+    // * token program account
+    let token_program_account = instruction::AccountMeta {
+        pubkey: spl_token::id(),
+        is_signer: false,
+        is_writable: false,
+    };
+
+    let rent_account = instruction::AccountMeta {
+        pubkey: sysvar::rent::id(),
+        is_signer: false,
+        is_writable: false,
+    };
+
+    let accounts = vec![
+        exchange_booth_account.clone(),
+        auth_account.clone(),
+        system_program_account.clone(),
+        vault_a_account.clone(),
+        vault_b_account.clone(),
+        mint_a_account.clone(),
+        mint_b_account.clone(),
+        token_program_account.clone(),
+        rent_account.clone(),
+    ];
+
+    let initialize_exchange_booth_data = vec![0; mem::size_of::<u8>()];
+    let initialize_exchange_booth_ix = instruction::Instruction {
+        program_id: program_id,
+        accounts: accounts,
+        data: initialize_exchange_booth_data,
+    };
+
+    // * create transaction
+    let tx = Transaction::new_signed_with_payer(
+        &[initialize_exchange_booth_ix],
+        Some(&auth.pubkey()),
+        &[&auth],
         recent_blockhash,
     );
-    bank_client.process_transaction(mint_to_tx).await.unwrap();
 
-    /// Inspect mint state
-    let token_mint_account_info = bank_client
-        .get_account(mint_a_account.pubkey().clone())
-        .await
-        .unwrap()
-        .expect("could not get account");
-    let token_account_data = token_mint_account_info.data;
-    println!(
-        "account len : {:}, token account len: {:}",
-        Mint::LEN,
-        &token_account_data.len()
-    );
-    let mint_data = Mint::unpack(&token_account_data).unwrap();
-    assert_eq!(
-        mint_data.supply,
-        mint_amount.clone(),
-        "not correct amount in mint account"
-    );
-    let token_account_info = bank_client
-        .get_account(token_account.pubkey().clone())
-        .await
-        .unwrap()
-        .expect("could not fetch account information");
-    let account_data = Account::unpack(&token_account_info.data).unwrap();
-    println!("account data: {:?}", account_data);
-    assert_eq!(
-        account_data.amount,
-        mint_amount.clone(),
-        "not correct amount"
-    );
-
-    // create a vault
-    let vault_a = Keypair::new();
+    banks_client.process_transaction(tx).await.unwrap();
 }
