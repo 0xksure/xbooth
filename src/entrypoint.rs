@@ -13,7 +13,6 @@ fn process_instruction(
     accounts: &[AccountInfo],
     instruction_data: &[u8],
 ) -> ProgramResult {
-    println!("hello");
     msg!(
         "process_instruction: {}: {} accounts, data={:?}",
         program_id,

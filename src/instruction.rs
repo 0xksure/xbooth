@@ -25,11 +25,48 @@ pub enum XBoothIntruction {
     /// 6. token program A
     ///     - is_signer: false,
     ///     - is_writable: false
-    ///  7. token program B
-    ///     - is_signer: false,
-    ///     - is_writable: false
     ///
     /// instruction_data
     /// amount: amount of tokens of x that should be deposited
     InitializeExhangeBooth {},
+    /// Deposit
+    /// allows the booth admin to deposit tokens into one of the vaults
+    /// from the booth
+    ///
+    /// Accounts:
+    /// 1. system_program:
+    ///     - is_signer:false,
+    ///     - is_writable: false
+    /// 1. exchange_booth_account: pda
+    ///     - is_signer:false,
+    ///     - is_writable: true
+    /// 2. authority
+    ///     - is_signer: true,
+    ///     - is_writable: false
+    /// 3. token_account
+    ///     - is_signer: true,
+    ///     - is_writable: true,
+    /// 3. vault: pda
+    ///     - is_signer:false,
+    ///     - is_writable: false
+    /// 5. mint A
+    ///     - is_signer: false,
+    ///     - is_writable: true
+    /// 6. mint B
+    ///     - is_signer: false,
+    ///     - is_writable: true
+    /// 5. token program
+    ///     - is_signer: false,
+    ///     - is_writable: false
+    /// 7. rent account
+    ///     - is_signer: false,
+    ///     - is_writable: false
+    Deposit { amount: u64 },
+    /// Withdraw
+    /// should allow the owner of the exchange booth to
+    /// withdraw from any of the vaults and transfer it to a token account
+    ///
+    /// Accounts:
+    ///
+    Withdraw { amount: u64 },
 }

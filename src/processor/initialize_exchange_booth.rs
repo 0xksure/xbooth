@@ -5,6 +5,7 @@ use solana_program::{
     entrypoint::ProgramResult,
     msg,
     program::{invoke, invoke_signed},
+    program_error::ProgramError,
     program_pack::Pack,
     pubkey::Pubkey,
     rent::Rent,
@@ -14,6 +15,7 @@ use solana_program::{
 use spl_token::{instruction, state::Account as TokenAccount};
 
 use crate::errors::XBoothError;
+use crate::processor;
 use crate::state;
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
@@ -50,55 +52,26 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
 
     // * --- Vault A
     // find pda
-    let (vault_a_pda, vault_a_bump_seed) = Pubkey::find_program_address(
-        &[
-            b"xbooth",
-            payer.key.as_ref(),
-            mint_a.key.as_ref(),
-            exchange_booth_account.key.as_ref(),
-        ],
-        program_id,
-    );
-    // check if correct public key
-    if vault_a_pda != *vault_a.key {
-        msg!("Invalid account key for vault b");
-        return Err(XBoothError::InvalidVaultAccount.into());
-    }
+    let (vault_a_pda, vault_a_bump_seed) =
+        processor::utils::get_vault_pda(program_id, exchange_booth_account, payer, mint_a, vault_a)
+            .unwrap();
 
     // * --- Vault B
     // find pda
-    let (vault_b_pda, vault_b_bump_seed) = Pubkey::find_program_address(
-        &[
-            b"xbooth",
-            payer.key.as_ref(),
-            mint_b.key.as_ref(),
-            exchange_booth_account.key.as_ref(),
-        ],
-        program_id,
-    );
-    // check if correct public key
-    if vault_b_pda != *vault_b.key {
-        msg!("Invalid account key for vault b");
-        return Err(XBoothError::InvalidVaultAccount.into());
-    }
+    let (vault_b_pda, vault_b_bump_seed) =
+        processor::utils::get_vault_pda(program_id, exchange_booth_account, payer, mint_b, vault_b)
+            .unwrap();
 
     // * -- Exchange Booth Account
     // get pda
-    let (xbooth_pda, xbooth_bump_seed) = Pubkey::find_program_address(
-        &[
-            b"xbooth",
-            payer.key.as_ref(),
-            mint_a.key.as_ref(),
-            mint_b.key.as_ref(),
-        ],
+    let (xbooth_pda, xbooth_bump_seed) = processor::utils::get_exchange_booth_pda(
         program_id,
-    );
-
-    // check if correct public key
-    if xbooth_pda != *exchange_booth_account.key {
-        msg!("Invalid account key for exchange booth");
-        return Err(XBoothError::InvalidVaultAccount.into());
-    }
+        exchange_booth_account,
+        payer,
+        mint_a,
+        mint_b,
+    )
+    .unwrap();
 
     // * Create exchange booth account
     msg!("create exchange booth account");

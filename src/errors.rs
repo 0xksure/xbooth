@@ -16,6 +16,14 @@ pub enum XBoothError {
     AccountIsNotWritable,
     #[error("Account is not signer")]
     AccountIsNotSigner,
+    #[error("Not correct owner")]
+    InvalidOwner,
+    #[error("Insufficient funds")]
+    InsufficientFunds,
+    #[error("Account is not initialized")]
+    AccountNotInitialized,
+    #[error("Invalid SPL token account")]
+    InvalidSPLTokenAccount,
 }
 
 impl From<XBoothError> for ProgramError {
