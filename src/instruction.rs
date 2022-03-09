@@ -34,31 +34,25 @@ pub enum XBoothIntruction {
     /// from the booth
     ///
     /// Accounts:
-    /// 1. system_program:
-    ///     - is_signer:false,
-    ///     - is_writable: false
     /// 1. exchange_booth_account: pda
     ///     - is_signer:false,
     ///     - is_writable: true
-    /// 2. authority
+    /// 2. authority: the signer of the transaction, owner of token_account
     ///     - is_signer: true,
     ///     - is_writable: false
-    /// 3. token_account
+    /// 3. token_account: account holding tokens from mint A
     ///     - is_signer: true,
     ///     - is_writable: true,
-    /// 3. vault: pda
+    /// 4. vault A: pda, vault that can hold mint A
     ///     - is_signer:false,
     ///     - is_writable: false
-    /// 5. mint A
+    /// 5. mint A: the mint account of Token A
     ///     - is_signer: false,
     ///     - is_writable: true
-    /// 6. mint B
+    /// 6. mint B: the mint account of Token B
     ///     - is_signer: false,
     ///     - is_writable: true
-    /// 5. token program
-    ///     - is_signer: false,
-    ///     - is_writable: false
-    /// 7. rent account
+    /// 7. token program: The spl_token program
     ///     - is_signer: false,
     ///     - is_writable: false
     Deposit { amount: u64 },
@@ -67,6 +61,26 @@ pub enum XBoothIntruction {
     /// withdraw from any of the vaults and transfer it to a token account
     ///
     /// Accounts:
-    ///
+    /// 1. exchange_booth_account: pda
+    ///     - is_signer:false,
+    ///     - is_writable: true
+    /// 2. authority: the signer of the transaction, owner of token_account
+    ///     - is_signer: true,
+    ///     - is_writable: false
+    /// 3. token_account: account holding tokens from mint A
+    ///     - is_signer: true,
+    ///     - is_writable: true,
+    /// 4. vault A: pda, vault that can hold mint A
+    ///     - is_signer:false,
+    ///     - is_writable: true
+    /// 5. mint A: the mint account of Token A
+    ///     - is_signer: false,
+    ///     - is_writable: false
+    /// 6. mint B: the mint account of Token B
+    ///     - is_signer: false,
+    ///     - is_writable: false
+    /// 7. token program: The spl_token program
+    ///     - is_signer: false,
+    ///     - is_writable: false
     Withdraw { amount: u64 },
 }

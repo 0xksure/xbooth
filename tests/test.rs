@@ -477,9 +477,7 @@ async fn test_deposit_into_vault() {
         vault_a_account.clone(),
         mint_a_account.clone(),
         mint_b_account.clone(),
-        system_program_account.clone(),
         token_program_account.clone(),
-        rent_account.clone(),
     ];
 
     let amount: u64 = 10;

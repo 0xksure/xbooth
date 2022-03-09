@@ -1,4 +1,6 @@
 use crate::errors::XBoothError;
+use crate::state::ExchangeBoothAccount;
+use borsh::BorshDeserialize;
 use solana_program::{account_info::AccountInfo, msg, program_error::ProgramError, pubkey::Pubkey};
 
 pub fn get_exchange_booth_pda(
@@ -24,6 +26,19 @@ pub fn get_exchange_booth_pda(
         return Err(XBoothError::InvalidVaultAccount.into());
     }
     Ok((xbooth_pda, xbooth_bump_seed))
+}
+
+pub fn check_stored_owner(
+    exchange_booth_account: &AccountInfo,
+    authority: &AccountInfo,
+) -> Result<(), ProgramError> {
+    let data = &mut (*exchange_booth_account.data).borrow_mut();
+    let exchange_booth_account_data = ExchangeBoothAccount::try_from_slice(&data).unwrap();
+    if authority.key != &exchange_booth_account_data.admin {
+        msg!("authority is not stored as sole owner of the exchange_booth_account");
+        return Err(XBoothError::InvalidOwner.into());
+    }
+    Ok(())
 }
 
 pub fn get_vault_pda(

@@ -5,7 +5,6 @@ use solana_program::{
     entrypoint::ProgramResult,
     msg,
     program::{invoke, invoke_signed},
-    program_error::ProgramError,
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
 };
@@ -24,9 +23,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> Pr
     let vault = next_account_info(accounts_iter)?;
     let mint_a = next_account_info(accounts_iter)?;
     let mint_b = next_account_info(accounts_iter)?;
-    let system_program = next_account_info(accounts_iter)?;
     let token_program = next_account_info(accounts_iter)?;
-    let rent_account = next_account_info(accounts_iter)?;
 
     // check corret permissions
     if !authority.is_signer {
