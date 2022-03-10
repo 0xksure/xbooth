@@ -372,6 +372,7 @@ async fn test_deposit_into_vault() {
         is_writable: false,
     };
 
+    // * generate token account for A tokens
     let token_account = Keypair::new();
     create_and_initialize_account_for_mint(
         &mut banks_client,
@@ -399,8 +400,40 @@ async fn test_deposit_into_vault() {
     .await
     .unwrap();
 
-    let token_account_meta = instruction::AccountMeta {
+    // * generate token Account for B tokens
+    let token_account_B = Keypair::new();
+    create_and_initialize_account_for_mint(
+        &mut banks_client,
+        recent_blockhash,
+        &spl_token::id(),
+        &token_account_B,
+        &mint_b,
+        &authority,
+    )
+    .await
+    .unwrap();
+
+    mint_amount(
+        &mut banks_client,
+        recent_blockhash,
+        &spl_token::id(),
+        &token_account_B.pubkey(),
+        &mint_b.pubkey(),
+        &auth,
+        &authority,
+        initial_token_amount.clone(),
+    )
+    .await
+    .unwrap();
+
+    let token_account_a_meta = instruction::AccountMeta {
         pubkey: token_account.pubkey(),
+        is_signer: true,
+        is_writable: true,
+    };
+
+    let token_account_b_meta = instruction::AccountMeta {
+        pubkey: token_account_B.pubkey(),
         is_signer: true,
         is_writable: true,
     };
@@ -474,7 +507,7 @@ async fn test_deposit_into_vault() {
     let deposit_accounts = vec![
         exchange_booth_account.clone(),
         authority_account.clone(),
-        token_account_meta.clone(),
+        token_account_a_meta.clone(),
         vault_a_account.clone(),
         mint_a_account.clone(),
         mint_b_account.clone(),
@@ -543,4 +576,17 @@ async fn test_deposit_into_vault() {
         "token amount {} ",
         account_data.amount,
     );
+
+    // * Exchange tokens
+    let exchange_tokens_ix_accounts = vec![
+        exchange_booth_account.clone(),
+        authority_account.clone(),
+        token_account_a_meta.clone(),
+        token_account_b_meta.clone(),
+        vault_a_account.clone(),
+        vault_b_account.clone(),
+        mint_a_account.clone(),
+        mint_b_account.clone(),
+        token_program_account.clone(),
+    ];
 }

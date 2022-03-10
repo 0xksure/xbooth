@@ -3,11 +3,13 @@ use solana_program::{
     account_info::next_account_info,
     account_info::AccountInfo,
     entrypoint::ProgramResult,
+    msg,
     program::{invoke, invoke_signed},
     program_pack::Pack,
     pubkey::Pubkey,
 };
 
+use crate::errors::XBoothError;
 use crate::processor::utils;
 use spl_token::{instruction, state::Mint};
 
@@ -15,7 +17,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
     let accounts = &mut accounts.iter();
     let exchange_booth_account = next_account_info(accounts)?;
     let authority_account = next_account_info(accounts)?;
-    let to_token_account = next_account_info(accounts)?;
+    let receiving_token_account = next_account_info(accounts)?;
     let from_token_account = next_account_info(accounts)?;
     let vault_a = next_account_info(accounts)?;
     let vault_b = next_account_info(accounts)?;
@@ -24,6 +26,50 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
     let token_program = next_account_info(accounts)?;
 
     // * checks
+    if !authority_account.is_signer {
+        msg!("authority needs to have signer privilege");
+        return Err(XBoothError::AccountIsNotSigner.into());
+    }
+
+    if !receiving_token_account.is_writable {
+        msg!("receiving token account needs to be writable");
+        return Err(XBoothError::AccountIsNotWritable.into());
+    }
+
+    if !from_token_account.is_writable {
+        msg!("from token account needs to be writable");
+        return Err(XBoothError::AccountIsNotWritable.into());
+    }
+
+    if !vault_a.is_writable {
+        msg!("vault A is not writable");
+        return Err(XBoothError::AccountIsNotWritable.into());
+    }
+
+    if !vault_b.is_writable {
+        msg!("vailt B is not writable");
+        return Err(XBoothError::AccountIsNotWritable.into());
+    }
+
+    let receiving_token_account_data =
+        spl_token::state::Account::unpack(&receiving_token_account.data.borrow())?;
+    let from_token_account_data =
+        spl_token::state::Account::unpack(&from_token_account.data.borrow())?;
+
+    if &from_token_account_data.mint != mint_a.key {
+        msg!("sending token account is not of the same mint as token A");
+        return Err(XBoothError::InvalidMint.into());
+    }
+
+    if &receiving_token_account_data.mint != mint_b.key {
+        msg!("receving token account is not of the same mint as token B");
+        return Err(XBoothError::InvalidMint.into());
+    }
+
+    if receiving_token_account_data.mint == from_token_account_data.mint {
+        msg!("receiving token account cannot be of the same mint as the sending token account");
+        return Err(XBoothError::UniqueMintAccounts.into());
+    }
 
     let mint_a_account_data = Mint::unpack(&mint_a.data.borrow())?;
     let from_a_decimals = mint_a_account_data.decimals;
@@ -39,6 +85,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
         mint_b,
     )
     .unwrap();
+
     // * Exchange
     // send
     let token_a_b_xr = 0.5;
@@ -69,7 +116,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
     let withdraw_from_b_ix = spl_token::instruction::transfer(
         &token_program.key,
         &vault_a.key,
-        &to_token_account.key,
+        &receiving_token_account.key,
         &exchange_booth_account.key,
         &[],
         amount_b,
@@ -81,7 +128,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
         &[
             token_program.clone(),
             vault_a.clone(),
-            to_token_account.clone(),
+            receiving_token_account.clone(),
             exchange_booth_account.clone(),
         ],
         &[&[

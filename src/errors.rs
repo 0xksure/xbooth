@@ -24,6 +24,10 @@ pub enum XBoothError {
     AccountNotInitialized,
     #[error("Invalid SPL token account")]
     InvalidSPLTokenAccount,
+    #[error("Invalid mint key")]
+    InvalidMint,
+    #[error("Accounts cannot have the same mint")]
+    UniqueMintAccounts,
 }
 
 impl From<XBoothError> for ProgramError {
