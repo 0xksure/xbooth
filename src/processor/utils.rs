@@ -5,7 +5,7 @@ use solana_program::{account_info::AccountInfo, msg, program_error::ProgramError
 
 pub fn get_exchange_booth_pda(
     program_id: &Pubkey,
-    xbooth_account: &AccountInfo,
+    exchange_booth_account: &AccountInfo,
     owner: &AccountInfo,
     mint_a: &AccountInfo,
     mint_b: &AccountInfo,
@@ -21,7 +21,7 @@ pub fn get_exchange_booth_pda(
     );
 
     // check if correct public key
-    if xbooth_pda != *xbooth_account.key {
+    if xbooth_pda != *exchange_booth_account.key {
         msg!("Invalid account key for exchange booth");
         return Err(XBoothError::InvalidVaultAccount.into());
     }
@@ -43,7 +43,7 @@ pub fn check_stored_owner(
 
 pub fn get_vault_pda(
     program_id: &Pubkey,
-    xbooth_account: &AccountInfo,
+    exchange_booth_account: &AccountInfo,
     owner: &AccountInfo,
     mint: &AccountInfo,
     vault: &AccountInfo,
@@ -53,7 +53,7 @@ pub fn get_vault_pda(
             b"xbooth",
             owner.key.as_ref(),
             mint.key.as_ref(),
-            xbooth_account.key.as_ref(),
+            exchange_booth_account.key.as_ref(),
         ],
         program_id,
     );
