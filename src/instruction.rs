@@ -83,4 +83,37 @@ pub enum XBoothIntruction {
     ///     - is_signer: false,
     ///     - is_writable: false
     Withdraw { amount: u64 },
+    /// Exchange tokens
+    /// should allow anybody to exchange token A for token B at an exchange rate A/B
+    ///
+    /// Accounts:
+    /// 1. Exchange_booth_account: pda
+    ///     - is_signer:false,
+    ///     - is_writable: false
+    /// 2. authority: signer of the transaction, owner of the token_account
+    ///     - is_signer:true,
+    ///     - is_writable: false,
+    /// 3. to_token_account: token to withdraw and deposit into
+    ///     - is_signer: false,
+    ///     - is_writable: true,
+    /// 4. from_token_account: token to withdraw and deposit into
+    ///     - is_signer: false,
+    ///     - is_writable: true,
+    /// 4. vault A: pda
+    ///     - is_signer: false,
+    ///     - is_writable:true
+    /// 5. vault B: pda
+    ///     - is_signer: false,
+    ///     - is_writable: true,
+    /// 6. mint_a: mint account for token A
+    ///     - is_signer: false,
+    ///     - is_writable: false
+    /// 7. mint_b: mint account for token B
+    ///     - is_signer: false,
+    ///     - is_writable: false
+    /// 8. token_program: the spl_token program
+    ///     - is_signer: false,
+    ///     - is_writable: false
+    /// (9. oracle account)
+    Exchange { amount: f64 },
 }

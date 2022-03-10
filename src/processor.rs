@@ -12,6 +12,7 @@ use solana_program::{
 };
 
 pub mod deposit;
+pub mod exchange;
 pub mod initialize_exchange_booth;
 pub mod utils;
 pub mod withdraw;
@@ -41,6 +42,10 @@ impl Processor {
             XBoothIntruction::Withdraw { amount } => {
                 msg!("xbooth withdraw");
                 withdraw::process(program_id, accounts, amount)?;
+            }
+            XBoothIntruction::Exchange { amount } => {
+                msg!("xbooth exchange");
+                exchange::process(program_id, accounts, amount)?;
             }
         }
         Ok(())
