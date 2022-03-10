@@ -385,6 +385,7 @@ async fn test_deposit_into_vault() {
     .unwrap();
 
     // mint some tokens
+    let initial_token_amount = 100_u64;
     mint_amount(
         &mut banks_client,
         recent_blockhash,
@@ -393,7 +394,7 @@ async fn test_deposit_into_vault() {
         &mint_a.pubkey(),
         &auth,
         &authority,
-        100,
+        initial_token_amount.clone(),
     )
     .await
     .unwrap();
@@ -480,13 +481,13 @@ async fn test_deposit_into_vault() {
         token_program_account.clone(),
     ];
 
-    let amount: u64 = 10;
+    let deposit_amount: u64 = 10;
     let deposit_instruction: Vec<u8> = vec![1; mem::size_of::<u8>()];
-    let transfer_amount = amount.to_le_bytes().to_vec();
+    let transfer_amount = deposit_amount.to_le_bytes().to_vec();
     let deposit_input_data = [&deposit_instruction[..], &transfer_amount[..]].concat();
     let deposit_ix = instruction::Instruction {
         program_id,
-        accounts: deposit_accounts,
+        accounts: deposit_accounts.clone(),
         data: deposit_input_data,
     };
 
@@ -507,4 +508,39 @@ async fn test_deposit_into_vault() {
         .expect("could not fetch account information");
     let account_data = Account::unpack(&token_account_info.data).unwrap();
     println!("token account data: {:?}", account_data);
+
+    // * withdraw funds from vault
+    let withdraw_ix_accounts = deposit_accounts.clone();
+    let withdraw_amount: u64 = 3;
+    let withdraw_instruction: Vec<u8> = vec![2; mem::size_of::<u8>()];
+    let withdraw_amount_ba = withdraw_amount.to_le_bytes().to_vec();
+    let withdraw_instruction_data = [&withdraw_instruction[..], &withdraw_amount_ba[..]].concat();
+
+    let withdraw_ix = instruction::Instruction {
+        program_id,
+        accounts: withdraw_ix_accounts,
+        data: withdraw_instruction_data,
+    };
+
+    let withdraw_tx = Transaction::new_signed_with_payer(
+        &[withdraw_ix],
+        Some(&authority.pubkey()),
+        &[&authority, &token_account],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(withdraw_tx).await.unwrap();
+
+    // sanity check withdraw
+    let token_account_info = banks_client
+        .get_account(token_account.pubkey().clone())
+        .await
+        .unwrap()
+        .expect("could not fetch account information");
+    let account_data = Account::unpack(&token_account_info.data).unwrap();
+    assert_eq!(
+        account_data.amount,
+        initial_token_amount - deposit_amount + withdraw_amount,
+        "token amount {} ",
+        account_data.amount,
+    );
 }

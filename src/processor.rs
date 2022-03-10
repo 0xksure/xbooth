@@ -40,7 +40,7 @@ impl Processor {
             }
             XBoothIntruction::Withdraw { amount } => {
                 msg!("xbooth withdraw");
-                withdraw::process(program_id, accounts)?;
+                withdraw::process(program_id, accounts, amount)?;
             }
         }
         Ok(())
