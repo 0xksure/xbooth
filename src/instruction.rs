@@ -41,7 +41,7 @@ pub enum XBoothIntruction {
     ///     - is_signer: true,
     ///     - is_writable: false
     /// 3. token_account: account holding tokens from mint A
-    ///     - is_signer: true,
+    ///     - is_signer: false,
     ///     - is_writable: true,
     /// 4. vault A: pda, vault that can hold mint A
     ///     - is_signer:false,
@@ -68,7 +68,7 @@ pub enum XBoothIntruction {
     ///     - is_signer: true,
     ///     - is_writable: false
     /// 3. token_account: account holding tokens from mint A
-    ///     - is_signer: true,
+    ///     - is_signer: false,
     ///     - is_writable: true,
     /// 4. vault A: pda, vault that can hold mint A
     ///     - is_signer:false,

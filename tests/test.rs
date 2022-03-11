@@ -303,13 +303,13 @@ async fn test_deposit_into_vault() {
     // * Create accounts needed for the instructions
     let token_account_a_meta = instruction::AccountMeta {
         pubkey: token_account.pubkey(),
-        is_signer: true,
+        is_signer: false,
         is_writable: true,
     };
 
     let token_account_b_meta = instruction::AccountMeta {
         pubkey: token_account_b.pubkey(),
-        is_signer: true,
+        is_signer: false,
         is_writable: true,
     };
     // initialize authority account to hold same token as in vault
@@ -403,7 +403,7 @@ async fn test_deposit_into_vault() {
     let tx = Transaction::new_signed_with_payer(
         &[intiialize_ix, deposit_ix],
         Some(&authority.pubkey()),
-        &[&authority, &token_account],
+        &[&authority],
         recent_blockhash,
     );
     banks_client.process_transaction(tx).await.unwrap();
@@ -437,86 +437,86 @@ async fn test_deposit_into_vault() {
     let tx = Transaction::new_signed_with_payer(
         &[deposit_b_account_ix],
         Some(&authority.pubkey()),
-        &[&authority, &token_account_b],
+        &[&authority],
         recent_blockhash,
     );
     banks_client.process_transaction(tx).await.unwrap();
 
-    // * 2. Withdraw funds from vault A
-    let withdraw_ix_accounts = deposit_accounts.clone();
-    let withdraw_amount: f64 = 3.0;
-    let withdraw_instruction: Vec<u8> = vec![2; mem::size_of::<u8>()];
-    let withdraw_amount_ba = withdraw_amount.to_le_bytes().to_vec();
-    let withdraw_instruction_data = [&withdraw_instruction[..], &withdraw_amount_ba[..]].concat();
+    // // * 2. Withdraw funds from vault A
+    // let withdraw_ix_accounts = deposit_accounts.clone();
+    // let withdraw_amount: f64 = 3.0;
+    // let withdraw_instruction: Vec<u8> = vec![2; mem::size_of::<u8>()];
+    // let withdraw_amount_ba = withdraw_amount.to_le_bytes().to_vec();
+    // let withdraw_instruction_data = [&withdraw_instruction[..], &withdraw_amount_ba[..]].concat();
 
-    let withdraw_ix = instruction::Instruction {
-        program_id,
-        accounts: withdraw_ix_accounts,
-        data: withdraw_instruction_data,
-    };
+    // let withdraw_ix = instruction::Instruction {
+    //     program_id,
+    //     accounts: withdraw_ix_accounts,
+    //     data: withdraw_instruction_data,
+    // };
 
-    let withdraw_tx = Transaction::new_signed_with_payer(
-        &[withdraw_ix],
-        Some(&authority.pubkey()),
-        &[&authority, &token_account],
-        recent_blockhash,
-    );
-    banks_client.process_transaction(withdraw_tx).await.unwrap();
+    // let withdraw_tx = Transaction::new_signed_with_payer(
+    //     &[withdraw_ix],
+    //     Some(&authority.pubkey()),
+    //     &[&authority, &token_account],
+    //     recent_blockhash,
+    // );
+    // banks_client.process_transaction(withdraw_tx).await.unwrap();
 
-    // sanity check withdraw
-    let token_account_info = banks_client
-        .get_account(token_account.pubkey().clone())
-        .await
-        .unwrap()
-        .expect("could not fetch account information");
-    let account_data = Account::unpack(&token_account_info.data).unwrap();
-    let expected_account_amount = ((initial_token_a_amount - deposit_amount + withdraw_amount)
-        * f64::powf(10., mint_a_decimals.into())) as u64;
-    assert_eq!(
-        account_data.amount, expected_account_amount,
-        "token amount {} ",
-        account_data.amount,
-    );
+    // // sanity check withdraw
+    // let token_account_info = banks_client
+    //     .get_account(token_account.pubkey().clone())
+    //     .await
+    //     .unwrap()
+    //     .expect("could not fetch account information");
+    // let account_data = Account::unpack(&token_account_info.data).unwrap();
+    // let expected_account_amount = ((initial_token_a_amount - deposit_amount + withdraw_amount)
+    //     * f64::powf(10., mint_a_decimals.into())) as u64;
+    // assert_eq!(
+    //     account_data.amount, expected_account_amount,
+    //     "token amount {} ",
+    //     account_data.amount,
+    // );
 
-    // * 3. Exchange A tokens with B tokens
-    let exchange_tokens_ix_accounts = vec![
-        exchange_booth_account.clone(),
-        authority_account.clone(),
-        // receiving account
-        token_account_a_meta.clone(),
-        // from account
-        token_account_b_meta.clone(),
-        vault_a_account.clone(),
-        vault_b_account.clone(),
-        mint_a_account.clone(),
-        mint_b_account.clone(),
-        token_program_account.clone(),
-    ];
+    // // * 3. Exchange A tokens with B tokens
+    // let exchange_tokens_ix_accounts = vec![
+    //     exchange_booth_account.clone(),
+    //     authority_account.clone(),
+    //     // receiving account
+    //     token_account_a_meta.clone(),
+    //     // from account
+    //     token_account_b_meta.clone(),
+    //     vault_a_account.clone(),
+    //     vault_b_account.clone(),
+    //     mint_a_account.clone(),
+    //     mint_b_account.clone(),
+    //     token_program_account.clone(),
+    // ];
 
-    let exchange_token_instruction: Vec<u8> = vec![3; mem::size_of::<u8>()];
-    let token_a_amount: f64 = 10.0;
-    let exhange_token_amount_instruction: Vec<u8> = token_a_amount.to_le_bytes().to_vec();
-    let exhange_token_instruction_data = [
-        &exchange_token_instruction[..],
-        &exhange_token_amount_instruction[..],
-    ]
-    .concat();
+    // let exchange_token_instruction: Vec<u8> = vec![3; mem::size_of::<u8>()];
+    // let token_a_amount: f64 = 10.0;
+    // let exhange_token_amount_instruction: Vec<u8> = token_a_amount.to_le_bytes().to_vec();
+    // let exhange_token_instruction_data = [
+    //     &exchange_token_instruction[..],
+    //     &exhange_token_amount_instruction[..],
+    // ]
+    // .concat();
 
-    let exhange_token_ix = instruction::Instruction {
-        program_id,
-        accounts: exchange_tokens_ix_accounts,
-        data: exhange_token_instruction_data,
-    };
+    // let exhange_token_ix = instruction::Instruction {
+    //     program_id,
+    //     accounts: exchange_tokens_ix_accounts,
+    //     data: exhange_token_instruction_data,
+    // };
 
-    let exhange_token_tx = Transaction::new_signed_with_payer(
-        &[exhange_token_ix],
-        Some(&authority.pubkey()),
-        &[&authority, &token_account, &token_account_b],
-        recent_blockhash,
-    );
+    // let exhange_token_tx = Transaction::new_signed_with_payer(
+    //     &[exhange_token_ix],
+    //     Some(&authority.pubkey()),
+    //     &[&authority, &token_account, &token_account_b],
+    //     recent_blockhash,
+    // );
 
-    banks_client
-        .process_transaction(exhange_token_tx)
-        .await
-        .unwrap();
+    // banks_client
+    //     .process_transaction(exhange_token_tx)
+    //     .await
+    //     .unwrap();
 }

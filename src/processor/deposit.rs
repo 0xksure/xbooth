@@ -41,6 +41,16 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
         return Err(XBoothError::AccountIsNotWritable.into());
     }
 
+    if !token_account.is_writable {
+        msg!("the token account must be writable");
+        return Err(XBoothError::AccountIsNotWritable.into());
+    }
+
+    let token_account_data =
+        spl_token::state::Account::unpack_from_slice(&token_account.try_borrow_data()?)?;
+
+    let is_transfer_a_token = token_account_data.mint == *mint_a.key;
+
     let vault_account = Account::unpack(&vault.data.borrow())
         .map_err(|err| {
             msg!("invalid vault account");
@@ -53,10 +63,19 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
         return Err(XBoothError::AccountNotInitialized.into());
     }
 
+    if vault_account.mint != token_account_data.mint {
+        msg!("vault account and token account is of different mints");
+        return Err(XBoothError::InvalidMint.into());
+    }
+
     // Decide if token A or B
-    let token_account_data =
-        spl_token::state::Account::unpack_from_slice(&token_account.try_borrow_data()?)?;
-    let is_transfer_a_token = token_account_data.mint == *mint_a.key;
+    // check the owner of the exchange booth account
+    let exchange_booth_data = &mut (*exchange_booth_account.data).borrow_mut();
+    let xbooth_data = ExchangeBoothAccount::try_from_slice(&exchange_booth_data).unwrap();
+    if xbooth_data.admin != *authority.key {
+        msg!("owner is not admin for the exchange booth");
+        return Err(XBoothError::InvalidOwner.into());
+    }
 
     // Check the vault
     let (_vault_pda, _vault_bump_seed) = utils::get_vault_pda(
@@ -67,15 +86,6 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
         vault,
     )
     .unwrap();
-
-    // check the owner of the exchange booth account
-    let exchange_booth_data = &mut (*exchange_booth_account.data).borrow_mut();
-
-    let xbooth_data = ExchangeBoothAccount::try_from_slice(&exchange_booth_data).unwrap();
-    if xbooth_data.admin != *authority.key {
-        msg!("owner is not admin for the exchange booth");
-        return Err(XBoothError::InvalidOwner.into());
-    }
 
     let (_xbooth_pda, _xbooth_bump) = utils::get_exchange_booth_pda(
         program_id,
