@@ -1,4 +1,3 @@
-use borsh::BorshDeserialize;
 use solana_program::{
     account_info::next_account_info,
     account_info::AccountInfo,
@@ -11,14 +10,13 @@ use solana_program::{
 
 use crate::errors::XBoothError;
 use crate::processor::utils;
-use spl_token::{instruction, state::Mint};
 
 pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> ProgramResult {
     let accounts = &mut accounts.iter();
     let exchange_booth_account = next_account_info(accounts)?;
     let authority_account = next_account_info(accounts)?;
-    let receiving_token_account = next_account_info(accounts)?;
     let from_token_account = next_account_info(accounts)?;
+    let receiving_token_account = next_account_info(accounts)?;
     let vault_a = next_account_info(accounts)?;
     let vault_b = next_account_info(accounts)?;
     let mint_a = next_account_info(accounts)?;
@@ -71,11 +69,6 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
         return Err(XBoothError::UniqueMintAccounts.into());
     }
 
-    let mint_a_account_data = Mint::unpack(&mint_a.data.borrow())?;
-    let from_a_decimals = mint_a_account_data.decimals;
-    let mint_b_account_data = Mint::unpack_from_slice(&mint_b.try_borrow_data()?)?;
-    let from_b_decimals = mint_b_account_data.decimals;
-
     // get exchange_booth_account pda and bump
     let (_exchange_booth_pda, exchange_booth_bump) = utils::get_exchange_booth_pda(
         program_id,
@@ -89,8 +82,13 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
     // * Exchange
     // send
     let token_a_b_xr = 0.5;
-    let amount_a: u64 = (amount * f64::powf(10., from_a_decimals.into())) as u64;
-    let amount_b: u64 = (amount * token_a_b_xr * f64::powf(10., from_b_decimals.into())) as u64;
+    let amount_a: u64 = utils::amount_to_lamports(mint_a, amount).unwrap();
+    let amount_b: u64 = utils::amount_to_lamports(mint_b, amount * token_a_b_xr).unwrap();
+
+    msg!(
+        "transfer amount: {} from token account to vault A",
+        amount_a
+    );
     let deposit_into_a_ix = spl_token::instruction::transfer(
         &token_program.key,
         &from_token_account.key,
@@ -113,9 +111,16 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
     .unwrap();
 
     // return
+    let vault_b_account =
+        spl_token::state::Account::unpack_from_slice(&vault_b.try_borrow_mut_data()?)?;
+    msg!(
+        "transfer amount: {} from vault B with balance {} to receiving token account",
+        amount_b,
+        vault_b_account.amount
+    );
     let withdraw_from_b_ix = spl_token::instruction::transfer(
         &token_program.key,
-        &vault_a.key,
+        &vault_b.key,
         &receiving_token_account.key,
         &exchange_booth_account.key,
         &[],
@@ -127,7 +132,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> Pr
         &withdraw_from_b_ix,
         &[
             token_program.clone(),
-            vault_a.clone(),
+            vault_b.clone(),
             receiving_token_account.clone(),
             exchange_booth_account.clone(),
         ],

@@ -12,7 +12,7 @@ use crate::errors::XBoothError;
 use crate::processor::utils;
 
 /// process will withdraw amount from an account
-pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> ProgramResult {
+pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> ProgramResult {
     let accounts_iter = &mut accounts.iter();
     let exchange_booth_account = next_account_info(accounts_iter)?;
     let authority_account = next_account_info(accounts_iter)?;
@@ -76,7 +76,9 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> Pr
     // Check amount in vault
     let vault_account_data =
         spl_token::state::Account::unpack(&vault_account.data.borrow()).unwrap();
-    if amount > vault_account_data.amount {
+
+    let amount_lamports = utils::amount_to_lamports(mint_a, amount).unwrap();
+    if amount_lamports > vault_account_data.amount {
         msg!("insufficient funds in vault accounts");
         return Err(XBoothError::InsufficientFunds.into());
     }
@@ -87,7 +89,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> Pr
         &token_account.key,
         &exchange_booth_account.key,
         &[],
-        amount,
+        amount_lamports,
     )
     .unwrap();
 

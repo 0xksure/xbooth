@@ -10,4 +10,12 @@ The project follows pretty basic Solana structure with a src folder containing t
 
 There are no unit tests as the integration like tests provided by the solana_program_test crate provides more robust testing.
 
+TODO:
+
+- [x] Initialize Exchange Booth
+- [x] Deposit into vault
+- [x] Withdraw from vault
+- [x] Exchange tokens using exchange booth
+- [ ] Close excahnge booth
+
 **The code is only meant as educational and is not a complete smart contract ready for anything else than you local validator network**

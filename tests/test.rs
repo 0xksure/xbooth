@@ -25,15 +25,17 @@ async fn mint_amount(
     mint: &Pubkey,
     mint_authority: &Keypair,
     payer: &Keypair,
-    amount: u64,
+    amount: f64,
+    mint_decimals: u8,
 ) -> Result<(), ProgramError> {
+    let mint_amount = (amount * f64::powf(10., mint_decimals.into())) as u64;
     let mint_ix = spl_token::instruction::mint_to(
         token_program,
         mint,
         account,
         &mint_authority.pubkey(),
         &[],
-        amount,
+        mint_amount,
     )
     .unwrap();
 
@@ -99,6 +101,7 @@ async fn create_and_initialize_mint(
     mint_authority: &Keypair,
     mint_account: &Keypair,
     token_program: &Pubkey,
+    decimals: &u8,
 ) -> Result<(), TransportError> {
     let rent = banks_client.get_rent().await.unwrap();
     let mint_rent = rent.minimum_balance(Mint::LEN);
@@ -117,7 +120,7 @@ async fn create_and_initialize_mint(
         &mint_account.pubkey(),
         &mint_authority.pubkey(),
         None,
-        9,
+        *decimals,
     )
     .unwrap();
 
@@ -170,146 +173,9 @@ fn create_vault_pda(
     )
 }
 
-// #[tokio::test]
-// async fn initialize_exchange_booth() {
-//     let program_id = Pubkey::new_unique();
-
-//     let auth = Keypair::new();
-//     let mint_a = Keypair::new();
-//     let mint_b = Keypair::new();
-
-//     let mut program_test = ProgramTest::new("xbooth", program_id, None);
-//     program_test.add_account(
-//         auth.pubkey(),
-//         solana_sdk::account::Account {
-//             lamports: 100_000_000_000,
-//             data: vec![],
-//             owner: system_program::id(),
-//             ..solana_sdk::account::Account::default()
-//         },
-//     );
-
-//     let (mut banks_client, auth, recent_blockhash) = program_test.start().await;
-
-//     create_and_initialize_mint(
-//         &mut banks_client,
-//         recent_blockhash,
-//         &auth,
-//         &auth,
-//         &mint_a,
-//         &spl_token::id(),
-//     )
-//     .await
-//     .unwrap();
-
-//     // create mint b
-//     create_and_initialize_mint(
-//         &mut banks_client,
-//         recent_blockhash,
-//         &auth,
-//         &auth,
-//         &mint_b,
-//         &spl_token::id(),
-//     )
-//     .await
-//     .unwrap();
-
-//     let (xbooth_pda, xbooth_bump_seed) =
-//         create_exchange_booth_pda(&program_id, &auth, &mint_a, &mint_b);
-
-//     let exchange_booth_account = instruction::AccountMeta {
-//         pubkey: xbooth_pda,
-//         is_writable: true,
-//         is_signer: false,
-//     };
-
-//     let auth_account = instruction::AccountMeta {
-//         pubkey: auth.pubkey(),
-//         is_writable: false,
-//         is_signer: true,
-//     };
-
-//     let system_program_account = instruction::AccountMeta {
-//         pubkey: system_program::id(),
-//         is_signer: false,
-//         is_writable: false,
-//     };
-
-//     // * find pda for vault A
-//     let (vault_a, vault_a_bump_seed) = create_vault_pda(&program_id, &auth, &mint_a, &xbooth_pda);
-
-//     let mint_a_account = instruction::AccountMeta {
-//         pubkey: mint_a.pubkey(),
-//         is_signer: false,
-//         is_writable: false,
-//     };
-
-//     let vault_a_account = instruction::AccountMeta {
-//         pubkey: vault_a,
-//         is_signer: false,
-//         is_writable: true,
-//     };
-
-//     // * find pda for vault B
-//     let (vault_b, vault_b_bump_seed) = create_vault_pda(&program_id, &auth, &mint_b, &xbooth_pda);
-
-//     let mint_b_account = instruction::AccountMeta {
-//         pubkey: mint_b.pubkey(),
-//         is_signer: false,
-//         is_writable: false,
-//     };
-
-//     let vault_b_account = instruction::AccountMeta {
-//         pubkey: vault_b,
-//         is_signer: false,
-//         is_writable: true,
-//     };
-
-//     // * token program account
-//     let token_program_account = instruction::AccountMeta {
-//         pubkey: spl_token::id(),
-//         is_signer: false,
-//         is_writable: false,
-//     };
-
-//     let rent_account = instruction::AccountMeta {
-//         pubkey: sysvar::rent::id(),
-//         is_signer: false,
-//         is_writable: false,
-//     };
-
-//     let accounts = vec![
-//         exchange_booth_account.clone(),
-//         auth_account.clone(),
-//         system_program_account.clone(),
-//         vault_a_account.clone(),
-//         vault_b_account.clone(),
-//         mint_a_account.clone(),
-//         mint_b_account.clone(),
-//         token_program_account.clone(),
-//         rent_account.clone(),
-//     ];
-
-//     let initialize_exchange_booth_data = vec![0; mem::size_of::<u8>()];
-//     let initialize_exchange_booth_ix = instruction::Instruction {
-//         program_id: program_id,
-//         accounts: accounts,
-//         data: initialize_exchange_booth_data,
-//     };
-
-//     // * create transaction
-//     let tx = Transaction::new_signed_with_payer(
-//         &[initialize_exchange_booth_ix],
-//         Some(&auth.pubkey()),
-//         &[&auth],
-//         recent_blockhash,
-//     );
-
-//     banks_client.process_transaction(tx).await.unwrap();
-// }
-
 #[tokio::test]
 async fn test_deposit_into_vault() {
+    // Initialize program test
     let program_id = Pubkey::new_unique();
     let mint_a = Keypair::new();
     let mint_b = Keypair::new();
@@ -327,7 +193,9 @@ async fn test_deposit_into_vault() {
     );
     let (mut banks_client, authority, recent_blockhash) = program_test.start().await;
 
-    // create and initialize mints
+    // Create and initialize mints
+    let mint_a_decimals = 9;
+    let mint_b_decimals = mint_a_decimals.clone();
     create_and_initialize_mint(
         &mut banks_client,
         recent_blockhash,
@@ -335,6 +203,7 @@ async fn test_deposit_into_vault() {
         &auth,
         &mint_a,
         &spl_token::id(),
+        &mint_a_decimals,
     )
     .await
     .unwrap();
@@ -342,15 +211,17 @@ async fn test_deposit_into_vault() {
     create_and_initialize_mint(
         &mut banks_client,
         recent_blockhash,
-        &authority,
-        &authority,
+        &auth,
+        &auth,
         &mint_b,
         &spl_token::id(),
+        &mint_b_decimals,
     )
     .await
     .unwrap();
+    // ------------------------------
 
-    // * Prepare Accounts
+    // * Create Accounts to hold A token and B token
     let system_program_account = instruction::AccountMeta {
         pubkey: system_program::id(),
         is_signer: false,
@@ -372,7 +243,7 @@ async fn test_deposit_into_vault() {
         is_writable: false,
     };
 
-    // * generate token account for A tokens
+    // * Create token account for A tokens
     let token_account = Keypair::new();
     create_and_initialize_account_for_mint(
         &mut banks_client,
@@ -385,8 +256,8 @@ async fn test_deposit_into_vault() {
     .await
     .unwrap();
 
-    // mint some tokens
-    let initial_token_amount = 100_u64;
+    // Mint A tokens into token A account
+    let initial_token_a_amount = 100.0;
     mint_amount(
         &mut banks_client,
         recent_blockhash,
@@ -395,37 +266,41 @@ async fn test_deposit_into_vault() {
         &mint_a.pubkey(),
         &auth,
         &authority,
-        initial_token_amount.clone(),
+        initial_token_a_amount.clone(),
+        mint_a_decimals,
     )
     .await
     .unwrap();
 
-    // * generate token Account for B tokens
-    let token_account_B = Keypair::new();
+    // * Create token Account for B tokens
+    let token_account_b = Keypair::new();
     create_and_initialize_account_for_mint(
         &mut banks_client,
         recent_blockhash,
         &spl_token::id(),
-        &token_account_B,
+        &token_account_b,
         &mint_b,
         &authority,
     )
     .await
     .unwrap();
 
+    let initial_token_b_amount = 100.0;
     mint_amount(
         &mut banks_client,
         recent_blockhash,
         &spl_token::id(),
-        &token_account_B.pubkey(),
+        &token_account_b.pubkey(),
         &mint_b.pubkey(),
         &auth,
         &authority,
-        initial_token_amount.clone(),
+        initial_token_b_amount.clone(),
+        mint_b_decimals,
     )
     .await
     .unwrap();
 
+    // * Create accounts needed for the instructions
     let token_account_a_meta = instruction::AccountMeta {
         pubkey: token_account.pubkey(),
         is_signer: true,
@@ -433,7 +308,7 @@ async fn test_deposit_into_vault() {
     };
 
     let token_account_b_meta = instruction::AccountMeta {
-        pubkey: token_account_B.pubkey(),
+        pubkey: token_account_b.pubkey(),
         is_signer: true,
         is_writable: true,
     };
@@ -481,9 +356,9 @@ async fn test_deposit_into_vault() {
         is_writable: false,
     };
 
-    // * compile accounts
+    // * ---------- Instructions and Transactions ---------------
 
-    // * initialize exchange booth instruction
+    // * 1. Initialize exchange booth, instruction
     let initialize_accounts = vec![
         exchange_booth_account.clone(),
         authority_account.clone(),
@@ -503,7 +378,7 @@ async fn test_deposit_into_vault() {
         data: initialize_exchange_booth_data,
     };
 
-    // * deposit amount instruction
+    // * Deposit tokens into vault A, instruction
     let deposit_accounts = vec![
         exchange_booth_account.clone(),
         authority_account.clone(),
@@ -514,17 +389,17 @@ async fn test_deposit_into_vault() {
         token_program_account.clone(),
     ];
 
-    let deposit_amount: u64 = 10;
+    let deposit_amount: f64 = 50.0;
     let deposit_instruction: Vec<u8> = vec![1; mem::size_of::<u8>()];
     let transfer_amount = deposit_amount.to_le_bytes().to_vec();
     let deposit_input_data = [&deposit_instruction[..], &transfer_amount[..]].concat();
     let deposit_ix = instruction::Instruction {
         program_id,
         accounts: deposit_accounts.clone(),
-        data: deposit_input_data,
+        data: deposit_input_data.clone(),
     };
 
-    // * process transaction
+    // * Process transaction
     let tx = Transaction::new_signed_with_payer(
         &[intiialize_ix, deposit_ix],
         Some(&authority.pubkey()),
@@ -533,7 +408,7 @@ async fn test_deposit_into_vault() {
     );
     banks_client.process_transaction(tx).await.unwrap();
 
-    // * check that the amount is transferred
+    // * TEST: the amount is transferred
     let token_account_info = banks_client
         .get_account(token_account.pubkey().clone())
         .await
@@ -542,9 +417,34 @@ async fn test_deposit_into_vault() {
     let account_data = Account::unpack(&token_account_info.data).unwrap();
     println!("token account data: {:?}", account_data);
 
-    // * withdraw funds from vault
+    // * Deposit tokens into vault B, instruction
+    let deposit_b_accounts = vec![
+        exchange_booth_account.clone(),
+        authority_account.clone(),
+        token_account_b_meta.clone(),
+        vault_b_account.clone(),
+        mint_a_account.clone(),
+        mint_b_account.clone(),
+        token_program_account.clone(),
+    ];
+
+    let deposit_b_account_ix = instruction::Instruction {
+        program_id,
+        accounts: deposit_b_accounts.clone(),
+        data: deposit_input_data.clone(),
+    };
+
+    let tx = Transaction::new_signed_with_payer(
+        &[deposit_b_account_ix],
+        Some(&authority.pubkey()),
+        &[&authority, &token_account_b],
+        recent_blockhash,
+    );
+    banks_client.process_transaction(tx).await.unwrap();
+
+    // * 2. Withdraw funds from vault A
     let withdraw_ix_accounts = deposit_accounts.clone();
-    let withdraw_amount: u64 = 3;
+    let withdraw_amount: f64 = 3.0;
     let withdraw_instruction: Vec<u8> = vec![2; mem::size_of::<u8>()];
     let withdraw_amount_ba = withdraw_amount.to_le_bytes().to_vec();
     let withdraw_instruction_data = [&withdraw_instruction[..], &withdraw_amount_ba[..]].concat();
@@ -570,18 +470,21 @@ async fn test_deposit_into_vault() {
         .unwrap()
         .expect("could not fetch account information");
     let account_data = Account::unpack(&token_account_info.data).unwrap();
+    let expected_account_amount = ((initial_token_a_amount - deposit_amount + withdraw_amount)
+        * f64::powf(10., mint_a_decimals.into())) as u64;
     assert_eq!(
-        account_data.amount,
-        initial_token_amount - deposit_amount + withdraw_amount,
+        account_data.amount, expected_account_amount,
         "token amount {} ",
         account_data.amount,
     );
 
-    // * Exchange tokens
+    // * 3. Exchange A tokens with B tokens
     let exchange_tokens_ix_accounts = vec![
         exchange_booth_account.clone(),
         authority_account.clone(),
+        // receiving account
         token_account_a_meta.clone(),
+        // from account
         token_account_b_meta.clone(),
         vault_a_account.clone(),
         vault_b_account.clone(),
@@ -589,4 +492,31 @@ async fn test_deposit_into_vault() {
         mint_b_account.clone(),
         token_program_account.clone(),
     ];
+
+    let exchange_token_instruction: Vec<u8> = vec![3; mem::size_of::<u8>()];
+    let token_a_amount: f64 = 10.0;
+    let exhange_token_amount_instruction: Vec<u8> = token_a_amount.to_le_bytes().to_vec();
+    let exhange_token_instruction_data = [
+        &exchange_token_instruction[..],
+        &exhange_token_amount_instruction[..],
+    ]
+    .concat();
+
+    let exhange_token_ix = instruction::Instruction {
+        program_id,
+        accounts: exchange_tokens_ix_accounts,
+        data: exhange_token_instruction_data,
+    };
+
+    let exhange_token_tx = Transaction::new_signed_with_payer(
+        &[exhange_token_ix],
+        Some(&authority.pubkey()),
+        &[&authority, &token_account, &token_account_b],
+        recent_blockhash,
+    );
+
+    banks_client
+        .process_transaction(exhange_token_tx)
+        .await
+        .unwrap();
 }

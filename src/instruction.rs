@@ -55,7 +55,7 @@ pub enum XBoothIntruction {
     /// 7. token program: The spl_token program
     ///     - is_signer: false,
     ///     - is_writable: false
-    Deposit { amount: u64 },
+    Deposit { amount: f64 },
     /// Withdraw
     /// should allow the owner of the exchange booth to
     /// withdraw from any of the vaults and transfer it to a token account
@@ -82,7 +82,7 @@ pub enum XBoothIntruction {
     /// 7. token program: The spl_token program
     ///     - is_signer: false,
     ///     - is_writable: false
-    Withdraw { amount: u64 },
+    Withdraw { amount: f64 },
     /// Exchange tokens
     /// should allow anybody to exchange token A for token B at an exchange rate A/B
     ///

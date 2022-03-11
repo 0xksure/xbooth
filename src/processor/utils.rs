@@ -1,7 +1,9 @@
 use crate::errors::XBoothError;
 use crate::state::ExchangeBoothAccount;
 use borsh::BorshDeserialize;
-use solana_program::{account_info::AccountInfo, msg, program_error::ProgramError, pubkey::Pubkey};
+use solana_program::{
+    account_info::AccountInfo, msg, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey,
+};
 
 pub fn get_exchange_booth_pda(
     program_id: &Pubkey,
@@ -63,4 +65,12 @@ pub fn get_vault_pda(
         return Err(XBoothError::InvalidVaultAccount.into());
     }
     Ok((vault_pda, vault_b_bump_seed))
+}
+
+pub fn amount_to_lamports(mint: &AccountInfo, amount: f64) -> Result<u64, ProgramError> {
+    let mint_account_data = spl_token::state::Mint::unpack_from_slice(&mint.try_borrow_data()?)?;
+    let mint_decimals = mint_account_data.decimals;
+
+    let lamports = (amount * f64::powf(10., mint_decimals.into())) as u64;
+    Ok(lamports)
 }

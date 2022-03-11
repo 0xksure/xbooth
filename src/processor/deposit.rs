@@ -4,17 +4,17 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
     msg,
-    program::{invoke, invoke_signed},
+    program::invoke,
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
 };
 use spl_token::{instruction, state::Account};
 
 use crate::errors::XBoothError;
-use crate::processor;
+use crate::processor::utils;
 use crate::state::ExchangeBoothAccount;
 
-pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> ProgramResult {
+pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: f64) -> ProgramResult {
     let accounts_iter = &mut accounts.iter();
 
     let exchange_booth_account = next_account_info(accounts_iter)?;
@@ -53,12 +53,17 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> Pr
         return Err(XBoothError::AccountNotInitialized.into());
     }
 
+    // Decide if token A or B
+    let token_account_data =
+        spl_token::state::Account::unpack_from_slice(&token_account.try_borrow_data()?)?;
+    let is_transfer_a_token = token_account_data.mint == *mint_a.key;
+
     // Check the vault
-    let (_vault_pda, _vault_bump_seed) = processor::utils::get_vault_pda(
+    let (_vault_pda, _vault_bump_seed) = utils::get_vault_pda(
         program_id,
         exchange_booth_account,
         authority,
-        mint_a,
+        if is_transfer_a_token { mint_a } else { mint_b },
         vault,
     )
     .unwrap();
@@ -72,7 +77,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> Pr
         return Err(XBoothError::InvalidOwner.into());
     }
 
-    let (_xbooth_pda, _xbooth_bump) = processor::utils::get_exchange_booth_pda(
+    let (_xbooth_pda, _xbooth_bump) = utils::get_exchange_booth_pda(
         program_id,
         exchange_booth_account,
         authority,
@@ -82,18 +87,15 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> Pr
     .unwrap();
 
     // check if enough funds in owner account
-    let spl_account = Account::unpack(&token_account.data.borrow())
-        .map_err(|err| {
-            msg!("invalid spl token account. Maybe account is not setup to be an spl account");
-            return XBoothError::InvalidSPLTokenAccount;
-        })
-        .unwrap();
+    let amount_lamports =
+        utils::amount_to_lamports(if is_transfer_a_token { mint_a } else { mint_b }, amount)
+            .unwrap();
 
-    if spl_account.amount < amount {
+    if token_account_data.amount < amount_lamports {
         msg!("not enough funds in account to transfer");
         return Err(XBoothError::InsufficientFunds.into());
     }
-    msg!("amount in token_account: {}", spl_account.amount);
+    msg!("lamports in token_account: {}", token_account_data.amount);
 
     // Transfer amount from owner to the vault
     let transfer_ix = instruction::transfer(
@@ -102,7 +104,7 @@ pub fn process(program_id: &Pubkey, accounts: &[AccountInfo], amount: u64) -> Pr
         &vault.key,
         &authority.key,
         &[&authority.key],
-        amount,
+        amount_lamports,
     )
     .unwrap();
 
